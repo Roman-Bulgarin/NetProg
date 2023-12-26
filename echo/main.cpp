@@ -1,57 +1,67 @@
-#include <netinet/in.h>
 #include <iostream>
+#include <string>
+#include <cstdlib> 
+#include <cstring> 
+#include <unistd.h> 
+#include <netinet/in.h> 
 #include <arpa/inet.h>
-#include <cstdlib>
-#include <unistd.h>
 using namespace std;
-
+void Exception(const string & why, const int exitCode ) 
+{
+    cout << "ErrorCode:"<<exitCode <<endl<< why << endl;
+    exit(exitCode);
+}
 int main()
 {
-    struct sockaddr_in {
-        short sin_family;
-        unsigned short sin_port;
-        struct in_addr sin_addr;
-        char sin_zero[8];
-    };
-    struct in_addr {
-        unsigned long s_addr;
-    };
+    sockaddr_in * selfAddr = new (sockaddr_in);
+    selfAddr->sin_family = AF_INET; 
+    selfAddr->sin_port = 0;         
+    selfAddr->sin_addr.s_addr = 0;  
 
-    int s = socket(AF_INET, SOCK_STREAM, 0);
-
-
-    sockaddr_in * self_addr = new (sockaddr_in);
-    self_addr->sin_family = AF_INET;
-    self_addr->sin_port = htons(7777);
-    self_addr->sin_addr.s_addr = inet_addr("127.0.0.1");
-
-    int b = bind(s,(const sockaddr*) self_addr,sizeof(sockaddr_in));
-    if(b == -1) {
-        cout << "Binding error\n";
-        return 1;
+    sockaddr_in * remoteAddr = new (sockaddr_in);
+    remoteAddr->sin_family = AF_INET;     
+    remoteAddr->sin_port = htons(44214); 
+    remoteAddr->sin_addr.s_addr = inet_addr("127.0.0.1"); 
+   
+    char *buffer = new char[4096];
+    strcpy(buffer,"Привет, как дела?");  
+    int msgLen = strlen(buffer);           
+   
+    int mySocket = socket(AF_INET, SOCK_STREAM, 0); 
+    if (mySocket == -1) {
+        close(mySocket);
+        Exception("Ошибка открытия сокета",11);
     }
-    int rl = listen(s, 5);
-    if(rl == -1) {
-        cout << "Listening error\n";
-        return 1;
-    }
-    while(true) {
-        sockaddr_in * client_addr = new sockaddr_in;
-        socklen_t len = sizeof (sockaddr_in);
-        int work_sock = accept(s, (sockaddr*)(client_addr), &len);
-        if(work_sock == -1) {
-            cout << "Error #2\n";
-        } else {
-            cout << "Successfull client connection!\n";
-            char *msg = new char [2560000];
-            recv(work_sock, msg, 2560000, 0);
-            cout << "Message from client: " << msg;
-            send(work_sock, msg, 10000, 0);
-            cout << "Message was returned to client!\n";
-            delete [] msg;
-            close(work_sock);
+    int rc = bind(mySocket,(const sockaddr *) selfAddr, sizeof(sockaddr_in));
+    if (rc == -1) {
+        close(mySocket);
+        Exception("Ошибка привязки сокета с локальным адресом",12);
         }
+
+    rc = connect(mySocket, (const sockaddr*) remoteAddr, sizeof(sockaddr_in));
+    if (rc == -1) {
+        close(mySocket);
+        Exception("Ошибка подключения сокета к удаленному серверу.", 13);
     }
-    close(s);
+
+    rc = send(mySocket, buffer, msgLen, 0);
+    if (rc == -1) {
+        close(mySocket);
+        Exception("Сообщение об ошибке отправки", 14);
+    }
+    cout << "Мы отправляем: " << buffer << endl; 
+      
+    rc = recv(mySocket, buffer, 4096, 0);
+    if (rc == -1) {
+        close(mySocket);
+       Exception("Ошибка получения ответа.", 15);
+    }
+    buffer[rc] = '\0'; 
+    cout << "Мы получаем: " << buffer << endl;
+    close(mySocket);
+
+    delete selfAddr;
+    delete remoteAddr;
+    delete[] buffer;
     return 0;
 }
