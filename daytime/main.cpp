@@ -1,54 +1,68 @@
-#include <netinet/in.h>
 #include <iostream>
+#include <string>
+#include <cstdlib> //exit()
+#include <cstring> // strpy()
+#include <unistd.h> //close()
+#include <netinet/in.h>
 #include <arpa/inet.h>
-#include <unistd.h>
 using namespace std;
-
+void Exception(const string & why, const int exitCode )
+{
+    cout << "ErrorCode:"<<exitCode <<endl<< why << endl;
+    exit(exitCode);
+}
 int main()
 {
-    struct sockaddr_in {
-        short sin_family;
-        unsigned short sin_port;
-        struct in_addr sin_addr;
-        char sin_zero[8];
-    };
-    struct in_addr {
-        unsigned long s_addr;
-    };
 
-    int s = socket(AF_INET, SOCK_DGRAM, 0); 
-    if(s == -1) {
-        cout << "Socket error\n";
-        return 1;
-    }
-    sockaddr_in * self_addr = new (sockaddr_in);
-    self_addr->sin_family = AF_INET; 
-    self_addr->sin_port = htons(44213); 
-    self_addr->sin_addr.s_addr = inet_addr("127.0.0.1"); 
+    sockaddr_in * selfAddr = new (sockaddr_in);
+    selfAddr->sin_family = AF_INET; 
+    selfAddr->sin_port = 0;        
+    selfAddr->sin_addr.s_addr = 0;
 
-    sockaddr_in * srv_addr = new (sockaddr_in);
-    srv_addr->sin_family = AF_INET; 
-    srv_addr->sin_port = htons(7); 
-    srv_addr->sin_addr.s_addr = inet_addr("172.16.40.1"); 
-    
-    int rb = bind(s,(const sockaddr*) self_addr,sizeof(sockaddr_in));
-    if (rb == -1) { 
-        cout << "Error: failed binding.\n";
-        return 1;
+    sockaddr_in * remoteAddr = new (sockaddr_in);
+    remoteAddr->sin_family = AF_INET;    
+    remoteAddr->sin_port = htons(44214); 
+    remoteAddr->sin_addr.s_addr = inet_addr("127.0.0.1");
+
+    char *buffer = new char[4096];
+    strcpy(buffer,"Дата и время:");  
+    int msgLen = strlen(buffer);      
+
+    int mySocket = socket(AF_INET, SOCK_DGRAM, 0); 
+    if (mySocket == -1) {
+        close(mySocket);
+        Exception("Ошибка открытия сокета",11);
     }
-    
-    int rc = connect(s,(const sockaddr*)srv_addr, sizeof(sockaddr_in));
-    if (rc == -1) { 
-        cout << "Error: failed connect to server.\n";
-        return 1;
-    } else {
-        cout << "We are connect to server!\n";
-        char connection_msg[50] = "Hello, it's client!";
-        send(s, connection_msg, sizeof(connection_msg), 0);
-        char daytime[50];
-        recv(s, daytime, sizeof(daytime), 0); 
-        cout << "Daytime from server: " << daytime << endl;
-        close(s);
-        return 0;
+    int rc = bind(mySocket,(const sockaddr *) selfAddr, sizeof(sockaddr_in));
+    if (rc == -1) {
+        close(mySocket);
+        Exception("Ошибка привязки сокета с локальным адресом",12);
     }
+
+    rc = connect(mySocket, (const sockaddr*) remoteAddr, sizeof(sockaddr_in));
+    if (rc == -1) {
+        close(mySocket);
+        Exception("Ошибка подключения сокета к удаленному серверу.", 13);
+    }
+
+    rc = send(mySocket, buffer, msgLen, 0);
+    if (rc == -1) {
+        close(mySocket);
+        Exception("Сообщение об ошибке отправки", 14);
+    }
+    cout << "Мы отправляем: " << buffer << endl;
+
+    rc = recv(mySocket, buffer, 4096, 0);
+    if (rc == -1) {
+        close(mySocket);
+        Exception("Ошибка получения ответа.", 15);
+    }
+    buffer[rc] = '\0';
+    cout << "Мы получаем: " << buffer << endl; 
+    close(mySocket);
+
+    delete selfAddr;
+    delete remoteAddr;
+    delete[] buffer;
+    return 0;
 }
