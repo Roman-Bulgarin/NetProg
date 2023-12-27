@@ -1,54 +1,56 @@
+#include <iostream>
+#include <cstring>
 #include <netinet/in.h>
 #include <iostream>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <string>
+#include <memory>
 using namespace std;
 
-int main()
-{
-    struct sockaddr_in {
-        short sin_family;
-        unsigned short sin_port;
-        struct in_addr sin_addr;
-        char sin_zero[8];
-    };
-    struct in_addr {
-        unsigned long s_addr;
-    };
+int main(){
+	unique_ptr< sockaddr_in > self_addr(new sockaddr_in);
+    unique_ptr< sockaddr_in > remote_addr(new sockaddr_in);
+    int sr_code;
 
-    int s = socket(AF_INET, SOCK_DGRAM, 0); 
-    if(s == -1) {
-        cout << "Socket error\n";
+    int sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if( sock < 0 ) {
+        cerr << "Failed to create socket" << endl;
         return 1;
     }
-    sockaddr_in * self_addr = new (sockaddr_in);
-    self_addr->sin_family = AF_INET; 
-    self_addr->sin_port = htons(44213); 
-    self_addr->sin_addr.s_addr = inet_addr("127.0.0.1"); 
 
-    sockaddr_in * srv_addr = new (sockaddr_in);
-    srv_addr->sin_family = AF_INET; 
-    srv_addr->sin_port = htons(7); 
-    srv_addr->sin_addr.s_addr = inet_addr("172.16.40.1"); 
-    
-    int rb = bind(s,(const sockaddr*) self_addr,sizeof(sockaddr_in));
-    if (rb == -1) { 
-        cout << "Error: failed binding.\n";
+
+    self_addr->sin_family = AF_INET;
+    self_addr->sin_addr.s_addr = INADDR_ANY;
+    self_addr->sin_port = htons(0);
+
+    if( bind(sock, reinterpret_cast< const sockaddr* >(self_addr.get()), sizeof(sockaddr)) < 0 ) {
+        cerr << "Failed to bind socket" << endl;
         return 1;
     }
-    
-    int rc = connect(s,(const sockaddr*)srv_addr, sizeof(sockaddr_in));
-    if (rc == -1) { 
-        cout << "Error: failed connect to server.\n";
+
+    remote_addr->sin_family = AF_INET;
+    remote_addr->sin_addr.s_addr = inet_addr("82.179.90.12");//inet_addr("172.16.40.1");
+    remote_addr->sin_port = htons(13);
+
+    char buf[256];
+
+    if( sendto(sock, buf, 256, 0, reinterpret_cast< const sockaddr* >(remote_addr.get()), sizeof(sockaddr)) < 0 ) {
+        cerr << "Failed to start exchange" << endl;
         return 1;
-    } else {
-        cout << "We are connect to server!\n";
-        char connection_msg[50] = "Hello, it's client!";
-        send(s, connection_msg, sizeof(connection_msg), 0);
-        char daytime[50];
-        recv(s, daytime, sizeof(daytime), 0); 
-        cout << "Daytime from server: " << daytime << endl;
-        close(s);
-        return 0;
     }
-} 
+
+    socklen_t clen = sizeof(sockaddr);
+
+    sr_code = recvfrom(sock, buf, 256, 0, reinterpret_cast< sockaddr* >(remote_addr.get()), &clen);
+    if( sr_code == -1 ) {
+        cerr << "Failed to recieve message" << endl;
+        return 1;
+    }
+
+    string daytime(buf, sr_code);
+
+    cout << daytime << endl;
+    
+    return 0;
+}
