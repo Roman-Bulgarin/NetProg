@@ -9,7 +9,7 @@
 using namespace std;
 
 int main(){
-	unique_ptr< sockaddr_in > self_addr(new sockaddr_in);
+    unique_ptr< sockaddr_in > self_addr(new sockaddr_in);
     unique_ptr< sockaddr_in > remote_addr(new sockaddr_in);
     int sr_code;
 
